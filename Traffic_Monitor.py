@@ -8,7 +8,7 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from operator import attrgetter
 from ryu.lib import hub
-
+import datetime
 
 
 class SimpleSwitch13(app_manager.RyuApp):
@@ -36,10 +36,11 @@ class SimpleSwitch13(app_manager.RyuApp):
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(10)
+            hub.sleep(1)
 
     def _request_stats(self, datapath):
-        self.logger.debug('send stats request: %016x', datapath.id)
+        self.logger.info(datetime.datetime.now().strftime("%H:%M:%S"))
+        self.logger.info('Send stats request: %016x', datapath.id)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -50,20 +51,13 @@ class SimpleSwitch13(app_manager.RyuApp):
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
 
-        self.logger.info('datapath         '
-                         'in-port  eth-dst           '
-                         'out-port packets  bytes')
-        self.logger.info('---------------- '
-                         '-------- ----------------- '
-                         '-------- -------- --------')
+        self.logger.info('datapath            bytes')
+        self.logger.info('-------------------------')
+
         for stat in sorted([flow for flow in body if flow.priority == 1],
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
-            self.logger.info('%016x %8x %17s %8x %8d %8d',
-                             ev.msg.datapath.id,
-                             stat.match['in_port'], stat.match['eth_dst'],
-                             stat.instructions[0].actions[0].port,
-                             stat.packet_count, stat.byte_count)
+            self.logger.info('%016x %8d', ev.msg.datapath.id, stat.byte_count)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
