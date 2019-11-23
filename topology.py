@@ -14,12 +14,12 @@ class MyTopo( Topo ):
         
         # Add hosts and switches
         leftHost = self.addHost( 'h1' )
-        rightHost = self.addHost( 'h3' )
+        rightHost = self.addHost( 'h5' )
         SwitchA = self.addSwitch( 's1' )
-        SwitchB = self.addSwitch( 's21' )
-        SwitchC = self.addSwitch( 's22' )
-        SwitchD = self.addSwitch( 's23' )
-        SwitchE = self.addSwitch( 's3' )
+        SwitchB = self.addSwitch( 's2' )
+        SwitchC = self.addSwitch( 's3' )
+        SwitchD = self.addSwitch( 's4' )
+        SwitchE = self.addSwitch( 's5' )
         
         # Add links
         self.addLink( leftHost, SwitchA )
