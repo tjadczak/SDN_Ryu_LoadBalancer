@@ -11,14 +11,17 @@ from ryu.lib import hub
 import datetime
 
 
-class SimpleSwitch13(app_manager.RyuApp):
+class SimpleLoadBalancer(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
-        super(SimpleSwitch13, self).__init__(*args, **kwargs)
+        super(SimpleLoadBalancer, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.datapaths = {}
+        self.previous_byte_count_sum = [0, 0, 0, 0, 0, 0] #tu zapamietana wartosc przeslanych byteow w poprzedniej sekundzie
+        self.current_load = [0, 0, 0, 0, 0, 0] #tu obecny load na danym switchu w Mbps
         self.monitor_thread = hub.spawn(self._monitor)
+        self.time_interval = 5 # co ile sekund zbierane statystyki ze switchy
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
@@ -34,13 +37,15 @@ class SimpleSwitch13(app_manager.RyuApp):
 
     def _monitor(self):
         while True:
+            self.logger.info("---------------------------------------------------")
+            self.logger.info(datetime.datetime.now().strftime("%H:%M:%S"))
+            self.logger.info("---------------------------------------------------")
             for dp in self.datapaths.values():
                 self._request_stats(dp)
-            hub.sleep(1)
+            hub.sleep(self.time_interval)
 
     def _request_stats(self, datapath):
-        self.logger.info(datetime.datetime.now().strftime("%H:%M:%S"))
-        self.logger.info('Send stats request: %016x', datapath.id)
+        #self.logger.info('Send stats request: %016x', datapath.id)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -51,13 +56,21 @@ class SimpleSwitch13(app_manager.RyuApp):
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
 
-        self.logger.info('datapath            bytes')
-        self.logger.info('-------------------------')
-
+        transmited_data = 0
         for stat in sorted([flow for flow in body if flow.priority == 1],
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
-            self.logger.info('%016x %8d', ev.msg.datapath.id, stat.byte_count)
+            #sumowanie przeslanych danych przez kazdy flow
+            #stat.byte_count pokazuje ilosc bajtow przeslanych sumarycznie dla danego flowa
+            #wiec trzea odjac od poprzedniej probki obecna zeby policzyc przeslane w ciagu sekundy
+            transmited_data += stat.byte_count
+
+
+        self.current_load[ev.msg.datapath.id] = (transmited_data - self.previous_byte_count_sum[ev.msg.datapath.id])*8.0/1000000/self.time_interval 
+        self.previous_byte_count_sum[ev.msg.datapath.id] = transmited_data 
+        
+        self.logger.info("Datapath : %016x load : %10f Mbps", 
+                ev.msg.datapath.id, self.current_load[ev.msg.datapath.id])
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -106,17 +119,65 @@ class SimpleSwitch13(app_manager.RyuApp):
         src = eth.src
 
         dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
+        #self.mac_to_port.setdefault(dpid, {})
 
-        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+        #self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
         # learn a mac address to avoid FLOOD next time.
-        self.mac_to_port[dpid][src] = in_port
+        #self.mac_to_port[dpid][src] = in_port
 
-        if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
-        else:
-            out_port = ofproto.OFPP_FLOOD
+        #if dst in self.mac_to_port[dpid]:
+        #    out_port = self.mac_to_port[dpid][dst]
+        #else:
+        #    out_port = ofproto.OFPP_FLOOD
+        if (dpid == 1 and in_port == 1): #jesli switch 1 i przyszlo z portu 1(od h1)
+            if self.current_load[2] <= self.current_load[3]:
+                if self.current_load[2] <= self.current_load[4]:
+                    out_port = 2
+                    self.logger.info("dp 1 out 2")
+                else:
+                    out_port = 4
+                    self.logger.info("dp 1 out 4")
+            else:
+                if self.current_load[3] <= self.current_load[4]:
+                    out_port = 3
+                    self.logger.info("dp 1 out 3")
+                else:
+                    out_port = 4
+                    self.logger.info("dp 1 out 4")
+        elif dpid == 1: #jesli switch 1 i przyszlo z innego portu(ktorys z 3 switchy)
+            out_port = 1
+            self.logger.info("dp 1 out 1")
+
+
+        elif (dpid == 2 and in_port == 1):
+            out_port = 2
+        elif (dpid == 3 and in_port == 1):
+            out_port = 2
+        elif (dpid == 4 and in_port == 1):
+            out_port = 2
+
+        elif (dpid == 2 and in_port == 2):
+            out_port = 1
+        elif (dpid == 3 and in_port == 2):
+            out_port = 1
+        elif (dpid == 4 and in_port == 2):
+            out_port = 1
+
+        if (dpid == 5 and in_port == 4): #jesli switch 5 i przyszlo z portu 4(od h5)
+            if self.current_load[2] <= self.current_load[3]:
+                if self.current_load[2] <= self.current_load[4]:
+                    out_port = 1
+                else:
+                    out_port = 3
+            else:
+                if self.current_load[3] <= self.current_load[4]:
+                    out_port = 2
+                else:
+                    out_port = 3
+        elif dpid == 5: #jesli switch 5 i przyszlo z innego portu(ktorys z 3 switchy)
+            out_port = 4
+
 
         actions = [parser.OFPActionOutput(out_port)]
 
