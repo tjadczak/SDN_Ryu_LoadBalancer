@@ -198,24 +198,24 @@ class SimpleLoadBalancer(app_manager.RyuApp):
 
         # install a flow to avoid packet_in next time
         if pkt_type == "ARP":
-            if out_port == 2 or out_port == 3 or out_port == 4:
+            if dpid == 1 or dpid == 5:
                 self.logger.info("Install ARP flow, Datapath : %4x, out port : %4d", dpid, out_port)
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src, eth_type=eth_type, arp_sha=arp_sha)
         elif pkt_type == "UDP":
-            if out_port == 2 or out_port == 3 or out_port == 4:
+            if dpid == 1 or dpid == 5:
                 self.logger.info("Install UDP flow, Datapath : %4x, out port : %4d, dst_port : %6d", dpid, out_port, dst_port)
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src, eth_type=eth_type, ip_proto=ip_proto, udp_dst=dst_port, udp_src=src_port)
         elif pkt_type == "TCP":
-            if out_port == 2 or out_port == 3 or out_port == 4:
+            if dpid == 1 or dpid == 5:
                 self.logger.info("Install TCP flow, Datapath : %4x, out port : %4d, dst_port : %6d", dpid, out_port, dst_port)
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src, eth_type=eth_type, ip_proto=ip_proto, tcp_dst=dst_port, tcp_src=src_port)
         elif pkt_type == "ICMP":
-            if out_port == 2 or out_port == 3 or out_port == 4:
+            if dpid == 1 or dpid == 5:
                 self.logger.info("Install ICMP flow, Datapath : %4x, out port : %4d, icmp_code : %6d, icmp_type : %6d", dpid, out_port, icmp_code, icmp_type)
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src, eth_type=eth_type, ip_proto=ip_proto, icmpv4_code=icmp_code, icmpv4_type=icmp_type)
         else:
-            if out_port == 2 or out_port == 3 or out_port == 4:
-                self.logger.info("Not ARP not TCP/UDP not ICMP")
+            #if out_port == 2 or out_port == 3 or out_port == 4:
+            self.logger.info("Not ARP not TCP/UDP not ICMP")
             self.logger.info("Not installing unknown flow")
             return
         
